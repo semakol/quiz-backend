@@ -10,3 +10,18 @@ router = APIRouter(prefix="/questions", tags=["questions"])
 def create_question(quiz_id: int, q_in: schemas.QuestionCreate, db: Session = Depends(get_db)):
     q = crud.create_question_with_answers(db, quiz_id, q_in)
     return q
+
+@router.put("/{question_id}", response_model=schemas.QuestionOut)
+def update_question(question_id: int, q_in: schemas.QuestionUpdate, db: Session = Depends(get_db)):
+    q = crud.get_question(db, question_id)
+    if not q:
+        raise HTTPException(status_code=404, detail="Question not found")
+    return crud.update_question(db, question_id, q_in)
+
+@router.delete("/{question_id}", status_code=204)
+def delete_question(question_id: int, db: Session = Depends(get_db)):
+    q = crud.get_question(db, question_id)
+    if not q:
+        raise HTTPException(status_code=404, detail="Question not found")
+    crud.delete_question(db, question_id)
+    return

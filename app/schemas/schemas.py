@@ -45,8 +45,16 @@ class QuizOut(BaseModel):
     class Config:
         model_config = {"from_attributes": True}
 
+# Add update schema for quizzes
+class QuizUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    author_id: Optional[int] = None
+    is_public: Optional[bool] = None
+
 # questions & answers
 class AnswerCreate(BaseModel):
+    question_id: int
     text: str
     is_correct: bool = False
 
@@ -56,6 +64,11 @@ class AnswerOut(BaseModel):
     is_correct: bool
     class Config:
         model_config = {"from_attributes": True}
+
+# Add update schema for answers
+class AnswerUpdate(BaseModel):
+    text: Optional[str] = None
+    is_correct: Optional[bool] = None
 
 class QuestionCreate(BaseModel):
     text: Optional[str]
@@ -75,6 +88,15 @@ class QuestionOut(BaseModel):
     answers: List[AnswerOut] = []
     class Config:
         model_config = {"from_attributes": True}
+
+# Add update schema for questions
+class QuestionUpdate(BaseModel):
+    text: Optional[str] = None
+    type: Optional[str] = None
+    time_limit: Optional[int] = None
+    order_index: Optional[int] = None
+    media_id: Optional[int] = None
+    answers: Optional[List[AnswerCreate]] = None
 
 # sessions
 class SessionCreate(BaseModel):

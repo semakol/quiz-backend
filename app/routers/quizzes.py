@@ -21,3 +21,18 @@ def get_quiz(quiz_id: int, db: Session = Depends(get_db)):
 @router.get("/", response_model=List[schemas.QuizOut])
 def list_quizzes(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return crud.list_quizzes(db, skip=skip, limit=limit)
+
+@router.put("/{quiz_id}", response_model=schemas.QuizOut)
+def update_quiz(quiz_id: int, quiz_in: schemas.QuizUpdate, db: Session = Depends(get_db)):
+    q = crud.get_quiz(db, quiz_id)
+    if not q:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+    return crud.update_quiz(db, quiz_id, quiz_in)
+
+@router.delete("/{quiz_id}", status_code=204)
+def delete_quiz(quiz_id: int, db: Session = Depends(get_db)):
+    q = crud.get_quiz(db, quiz_id)
+    if not q:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+    crud.delete_quiz(db, quiz_id)
+    return
