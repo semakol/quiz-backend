@@ -3,12 +3,11 @@ from typing import List, Optional
 from app.models import models
 from app.schemas import schemas
 from passlib.context import CryptContext
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+from app.utils.common import *
 
 # USER
 def create_user(db: Session, user_in: schemas.UserCreate) -> models.User:
-    hashed = pwd_context.hash(user_in.password)
+    hashed = hash_password(user_in.password)
     db_user = models.User(username=user_in.username, email=user_in.email, password_hash=hashed, role=user_in.role)
     db.add(db_user)
     db.commit()
@@ -41,7 +40,8 @@ def update_quiz(db: Session, quiz_id: int, quiz_in: schemas.QuizUpdate) -> model
         return None
     update_data = quiz_in.dict(exclude_unset=True)
     for k, v in update_data.items():
-        setattr(quiz, k, v)
+        if not v is None:
+            setattr(quiz, k, v)
     db.add(quiz)
     db.commit()
     db.refresh(quiz)
@@ -78,6 +78,8 @@ def update_question(db: Session, question_id: int, q_in: schemas.QuestionUpdate)
     # Do not handle answers diff here; only update question fields
     for k, v in update_data.items():
         if k == 'answers':
+            continue
+        if v is None:
             continue
         setattr(q, k, v)
     db.add(q)

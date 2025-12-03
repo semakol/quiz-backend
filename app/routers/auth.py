@@ -5,6 +5,7 @@ from app.services import crud
 from app.db.session import get_db
 from app.core.security import create_access_token
 from fastapi.security import OAuth2PasswordRequestForm
+from app.utils.common import check_password
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -21,9 +22,7 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
     user = crud.get_user_by_email(db, form_data.username)
     if not user:
         raise HTTPException(status_code=400, detail="Incorrect credentials")
-    from passlib.context import CryptContext
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-    if not pwd_context.verify(form_data.password, user.password_hash):
+    if not check_password(form_data.password, user.password_hash):
         raise HTTPException(status_code=400, detail="Incorrect credentials")
     access_token = create_access_token(subject=str(user.id))
     return schemas.Token(access_token=access_token)
