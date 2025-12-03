@@ -1,14 +1,11 @@
 # Quiz Backend (FastAPI)
 
-This repository contains a modular FastAPI backend for a quiz application.
+Установка:
 
-Features:
-- SQLAlchemy models for PostgreSQL
-- Pydantic schemas
-- CRUD services
-- JWT auth (basic)
-- WebSocket game rooms
-- Alembic skeleton
-- Docker & docker-compose
+```pip install -r requirements.txt```
 
-See the `app/` directory for source files.
+Запуск:
+
+```uvicorn app.main:app --host 0.0.0.0 --port 8000```
+
+Регистрация пока условная все методы работают без авторизации
