@@ -70,12 +70,24 @@ def create_question_with_answers(db: Session, quiz_id: int, q_in: schemas.Questi
 def get_question(db: Session, question_id: int) -> Optional[models.Question]:
     return db.get(models.Question, question_id)
 
+def get_questions(db: Session, quiz_id: Optional[int] = None, skip: int = 0, limit: int = 100) -> List[models.Question]:
+    query = db.query(models.Question)
+    if quiz_id is not None:
+        query = query.filter(models.Question.quiz_id == quiz_id)
+    return query.order_by(models.Question.order_index).offset(skip).limit(limit).all()
+
 def update_question(db: Session, question_id: int, q_in: schemas.QuestionUpdate) -> Optional[models.Question]:
     q = get_question(db, question_id)
     if not q:
         return None
     update_data = q_in.dict(exclude_unset=True)
-    # Do not handle answers diff here; only update question fields
+
+    if q_in.answers is not None:
+        db.query(models.Answer).filter(models.Answer.question_id == question_id).delete()
+        for a in q_in.answers:
+            ans = models.Answer(question_id=question_id, text=a.text, is_correct=a.is_correct)
+            db.add(ans)
+
     for k, v in update_data.items():
         if k == 'answers':
             continue
