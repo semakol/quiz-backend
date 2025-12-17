@@ -16,13 +16,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth.router)
-app.include_router(users.router)
-app.include_router(quizzes.router)
-app.include_router(questions.router)
-app.include_router(answers.router)
-app.include_router(sessions.router)
-app.include_router(websocket.router)
+app.include_router(auth.router, prefix='/api')
+app.include_router(users.router, prefix='/api')
+app.include_router(quizzes.router, prefix='/api')
+app.include_router(questions.router, prefix='/api')
+app.include_router(answers.router, prefix='/api')
+app.include_router(sessions.router, prefix='/api')
+app.include_router(websocket.router, prefix='/api')
 
 # create tables (for development; use Alembic for production)
 try:
@@ -30,6 +30,6 @@ try:
 except Exception:
     pass
 
-@app.get('/')
+@app.get('/api')
 def root():
     return {"hello": "quiz api"}
