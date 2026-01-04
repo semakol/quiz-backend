@@ -16,13 +16,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth.router, prefix='/api')
-app.include_router(users.router, prefix='/api')
-app.include_router(quizzes.router, prefix='/api')
-app.include_router(questions.router, prefix='/api')
-app.include_router(answers.router, prefix='/api')
-app.include_router(sessions.router, prefix='/api')
-app.include_router(websocket.router, prefix='/api')
+prefix = '/api'
+
+app.include_router(auth.router, prefix=prefix)
+app.include_router(users.router, prefix=prefix)
+app.include_router(quizzes.router, prefix=prefix)
+app.include_router(questions.router, prefix=prefix)
+app.include_router(answers.router, prefix=prefix)
+app.include_router(sessions.router, prefix=prefix)
+app.include_router(websocket.router, prefix=prefix)
 
 # create tables (for development; use Alembic for production)
 try:
