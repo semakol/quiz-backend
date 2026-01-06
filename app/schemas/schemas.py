@@ -2,7 +2,6 @@ from pydantic import BaseModel, EmailStr
 from typing import List, Optional
 from datetime import datetime
 
-# users
 class UserCreate(BaseModel):
     username: str
     email: EmailStr
@@ -19,7 +18,6 @@ class UserOut(BaseModel):
     class Config:
         model_config = {"from_attributes": True}
 
-# auth
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -27,7 +25,6 @@ class Token(BaseModel):
 class TokenPayload(BaseModel):
     sub: str
 
-# quizzes
 class QuizCreate(BaseModel):
     title: str
     description: Optional[str] = None
@@ -45,14 +42,12 @@ class QuizOut(BaseModel):
     class Config:
         model_config = {"from_attributes": True}
 
-# Add update schema for quizzes
 class QuizUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     author_id: Optional[int] = None
     is_public: Optional[bool] = None
 
-# questions & answers
 class AnswerCreate(BaseModel):
     question_id: int
     text: str
@@ -65,7 +60,6 @@ class AnswerOut(BaseModel):
     class Config:
         model_config = {"from_attributes": True}
 
-# Add update schema for answers
 class AnswerUpdate(BaseModel):
     text: Optional[str] = None
     is_correct: Optional[bool] = None
@@ -78,6 +72,14 @@ class QuestionCreate(BaseModel):
     media_id: Optional[int]
     answers: Optional[List[AnswerCreate]] = []
 
+class MediaOut(BaseModel):
+    id: int
+    title: str
+    uri: str
+
+    class Config:
+        model_config = {"from_attributes": True}
+
 class QuestionOut(BaseModel):
     id: int
     text: Optional[str]
@@ -85,11 +87,11 @@ class QuestionOut(BaseModel):
     time_limit: Optional[int]
     order_index: int
     media_id: Optional[int]
+    media: Optional[MediaOut] = None
     answers: List[AnswerOut] = []
     class Config:
         model_config = {"from_attributes": True}
 
-# Add update schema for questions
 class QuestionUpdate(BaseModel):
     text: Optional[str] = None
     type: Optional[str] = None
@@ -98,7 +100,10 @@ class QuestionUpdate(BaseModel):
     media_id: Optional[int] = None
     answers: Optional[List[AnswerCreate]] = None
 
-# sessions
+class MediaCreate(BaseModel):
+    title: str
+    uri: str
+
 class SessionCreate(BaseModel):
     quiz_id: int
     host_id: int

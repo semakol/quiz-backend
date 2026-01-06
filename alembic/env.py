@@ -6,16 +6,12 @@ from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 from alembic import context
 
-# Add project root to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# this is the Alembic Config object
 config = context.config
 
-# Interpret the config file for Python logging.
 fileConfig(config.config_file_name)
 
-# Import your models here:
 from app.db.base import Base
 from app.models import models
 

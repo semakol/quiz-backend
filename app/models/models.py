@@ -64,6 +64,7 @@ class SessionGame(Base):
     started_at = Column(TIMESTAMP, default=datetime.utcnow)
     ended_at = Column(TIMESTAMP, nullable=True)
     status = Column(String(50), nullable=False)
+    current_question_id = Column(Integer, ForeignKey("questions.id"), nullable=True)
 
 class SessionPlayer(Base):
     __tablename__ = "sessions_players"
