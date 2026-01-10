@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError, OperationalError
 from app.schemas import schemas
 from app.services import crud
 from app.db.session import get_db
@@ -8,27 +9,51 @@ from app.core.config import settings
 from app.db.redis import cache_user_check, get_cached_user_check, cache_token
 from fastapi.security import OAuth2PasswordRequestForm
 from app.utils.common import check_password
+import logging
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post('/signup', response_model=schemas.UserOut)
 def signup(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
-    cached_result = get_cached_user_check(user_in.email)
-    if cached_result is True:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
-    existing = crud.get_user_by_email(db, user_in.email)
-    if existing:
+    try:
+        cached_result = get_cached_user_check(user_in.email)
+        if cached_result is True:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        
+        existing = crud.get_user_by_email(db, user_in.email)
+        if existing:
+            cache_user_check(user_in.email, True)
+            raise HTTPException(status_code=400, detail="Email already registered")
+        
+        cache_user_check(user_in.email, False)
+        
+        user = crud.create_user(db, user_in)
+        
         cache_user_check(user_in.email, True)
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
-    cache_user_check(user_in.email, False)
-    
-    user = crud.create_user(db, user_in)
-    
-    cache_user_check(user_in.email, True)
-    
-    return user
+        
+        return user
+    except OperationalError as e:
+        logger.error(f"Ошибка подключения к БД при регистрации: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail=f"Ошибка подключения к базе данных. Проверьте DATABASE_URL в .env файле. Ошибка: {str(e)}"
+        )
+    except SQLAlchemyError as e:
+        logger.error(f"Ошибка SQLAlchemy при регистрации: {e}")
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Ошибка базы данных: {str(e)}"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Неожиданная ошибка при регистрации: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Внутренняя ошибка сервера: {str(e)}"
+        )
 
 @router.post('/token', response_model=schemas.Token)
 def login_for_access_token(

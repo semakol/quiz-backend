@@ -1,19 +1,10 @@
 from pydantic_settings import BaseSettings
-from typing import Optional
 
 
 class Settings(BaseSettings):
     # Database configuration
-    # For PostgreSQL: postgresql+psycopg2://user:password@host:port/database
-    # For YDB Serverless: yandex://endpoint:port/database_path
+    # PostgreSQL connection string: postgresql+psycopg2://user:password@host:port/database
     DATABASE_URL: str = "postgresql+psycopg2://postgres:postgres@localhost:5432/quizdb"
-    
-    # YDB Serverless specific settings (alternative to DATABASE_URL)
-    USE_YDB: bool = False
-    YDB_ENDPOINT: Optional[str] = None  # e.g., ydb.serverless.yandexcloud.net:2135
-    YDB_DATABASE: Optional[str] = None  # e.g., /ru-central1/b1g8skpblkos03malf3s/etn03jprrq1llc2nqce0
-    YDB_TOKEN: Optional[str] = None  # IAM token for authentication
-    YDB_SERVICE_ACCOUNT_KEY_FILE: Optional[str] = None  # Path to service account key file
     
     # Application settings
     SECRET_KEY: str = "CHANGE_ME_TO_SECRET"
