@@ -1,13 +1,28 @@
 from pydantic_settings import BaseSettings
+from typing import Optional
 
 
 class Settings(BaseSettings):
+    # Database configuration
+    # For PostgreSQL: postgresql+psycopg2://user:password@host:port/database
+    # For YDB Serverless: yandex://endpoint:port/database_path
     DATABASE_URL: str = "postgresql+psycopg2://postgres:postgres@localhost:5432/quizdb"
+    
+    # YDB Serverless specific settings (alternative to DATABASE_URL)
+    USE_YDB: bool = False
+    YDB_ENDPOINT: Optional[str] = None  # e.g., ydb.serverless.yandexcloud.net:2135
+    YDB_DATABASE: Optional[str] = None  # e.g., /ru-central1/b1g8skpblkos03malf3s/etn03jprrq1llc2nqce0
+    YDB_TOKEN: Optional[str] = None  # IAM token for authentication
+    YDB_SERVICE_ACCOUNT_KEY_FILE: Optional[str] = None  # Path to service account key file
+    
+    # Application settings
     SECRET_KEY: str = "CHANGE_ME_TO_SECRET"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
     APP_NAME: str = "Quiz API"
-    REDIS_URL: str =  "" #"redis://localhost:6379/0"
+    
+    # Redis configuration
+    REDIS_URL: str = ""  # "redis://localhost:6379/0"
     USE_INMEMORY_REDIS: bool = True
     REDIS_SIGNUP_RATE_LIMIT: int = 5
     REDIS_SIGNUP_RATE_WINDOW: int = 3600
@@ -15,6 +30,7 @@ class Settings(BaseSettings):
     REDIS_LOGIN_RATE_WINDOW: int = 900
     REQUIRE_AUTH: bool = True
 
+    # Yandex Object Storage
     USE_OBJECT_STORAGE: bool = False
     YANDEX_STORAGE_BUCKET: str = ""
     YANDEX_STORAGE_ACCESS_KEY: str = ""
