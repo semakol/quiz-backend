@@ -1,0 +1,27 @@
+
+image_id = ""
+
+lb_listener_port = 80
+lb_backend_port  = 8000
+
+# env_vars = {
+#   APP_NAME                    = "Quiz API"
+#   SECRET_KEY                  = "your-secret-key-here"
+#   ALGORITHM                   = "HS256"
+#   ACCESS_TOKEN_EXPIRE_MINUTES = "10080"
+#   REQUIRE_AUTH                = "true"
+#   DATABASE_URL                = "postgresql+psycopg2://user:password@host:5432/database"
+#   USE_INMEMORY_REDIS          = "true"
+#   REDIS_SIGNUP_RATE_LIMIT     = "5"
+#   REDIS_SIGNUP_RATE_WINDOW    = "3600"
+#   REDIS_LOGIN_RATE_LIMIT      = "10"
+#   REDIS_LOGIN_RATE_WINDOW     = "900"
+#   USE_OBJECT_STORAGE          = "true"
+#   YANDEX_STORAGE_BUCKET       = "quiz-media"
+#   YANDEX_STORAGE_ACCESS_KEY   = "your-access-key"
+#   YANDEX_STORAGE_SECRET_KEY   = "your-secret-key"
+#   YANDEX_STORAGE_ENDPOINT     = "https://storage.yandexcloud.net"
+#   YANDEX_STORAGE_REGION       = "ru-central1"
+# }
+
+# env_file_path = "/svr/quiz-backend/.env"
