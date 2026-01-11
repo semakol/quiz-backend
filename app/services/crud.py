@@ -23,13 +23,27 @@ def get_user_by_email(db: Session, email: str) -> Optional[models.User]:
 
 def create_quiz(db: Session, quiz_in: schemas.QuizCreate, current_user: Optional[models.User] = None) -> models.Quiz:
     quiz_data = quiz_in.dict()
-    if settings.REQUIRE_AUTH and current_user:
+    
+    # Если пользователь авторизован, всегда используем его ID как author_id
+    if current_user:
         quiz_data['author_id'] = current_user.id
     elif settings.REQUIRE_AUTH and not current_user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required"
         )
+    elif not current_user:
+        # Если REQUIRE_AUTH выключен и пользователь не авторизован,
+        # проверяем, что author_id существует в базе
+        author_id = quiz_data.get('author_id')
+        if author_id:
+            author = get_user(db, author_id)
+            if not author:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"User with id {author_id} does not exist"
+                )
+    
     quiz = models.Quiz(**quiz_data)
     db.add(quiz)
     db.commit()
@@ -100,7 +114,7 @@ def create_question_with_answers(db: Session, quiz_id: int, q_in: schemas.Questi
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not enough permissions"
             )
-    q = models.Question(quiz_id=quiz_id, text=q_in.text, type=q_in.type, time_limit=q_in.time_limit, order_index=q_in.order_index, media_id=q_in.media_id)
+    q = models.Question(quiz_id=quiz_id, text=q_in.text, type=q_in.type, time_limit=q_in.time_limit, order_index=q_in.order_index, media_id=q_in.media_id, score=q_in.score)
     db.add(q)
     db.flush()
     for a in q_in.answers or []:
@@ -148,7 +162,9 @@ def update_question(db: Session, question_id: int, q_in: schemas.QuestionUpdate,
     for k, v in update_data.items():
         if k == 'answers':
             continue
-        if v is None:
+        # Пропускаем только если значение явно None (не переданное поле)
+        # Но разрешаем обновлять score=0, так как это валидное значение
+        if v is None and k != 'score':
             continue
         setattr(q, k, v)
     db.add(q)

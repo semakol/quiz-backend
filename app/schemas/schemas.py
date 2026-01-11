@@ -28,7 +28,7 @@ class TokenPayload(BaseModel):
 class QuizCreate(BaseModel):
     title: str
     description: Optional[str] = None
-    author_id: int
+    author_id: Optional[int] = None  # Опционально - будет установлен из токена авторизации
     is_public: bool = False
 
 class QuizOut(BaseModel):
@@ -70,6 +70,7 @@ class QuestionCreate(BaseModel):
     time_limit: Optional[int]
     order_index: int
     media_id: Optional[int]
+    score: Optional[int] = None
     answers: Optional[List[AnswerCreate]] = []
 
 class MediaOut(BaseModel):
@@ -87,6 +88,7 @@ class QuestionOut(BaseModel):
     time_limit: Optional[int]
     order_index: int
     media_id: Optional[int]
+    score: Optional[int] = None
     media: Optional[MediaOut] = None
     answers: List[AnswerOut] = []
     class Config:
@@ -98,6 +100,7 @@ class QuestionUpdate(BaseModel):
     time_limit: Optional[int] = None
     order_index: Optional[int] = None
     media_id: Optional[int] = None
+    score: Optional[int] = None
     answers: Optional[List[AnswerCreate]] = None
 
 class MediaCreate(BaseModel):

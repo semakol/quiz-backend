@@ -4,10 +4,16 @@ from typing import Optional
 from app.schemas import schemas
 from app.services import crud
 from app.db.session import get_db
-from app.core.security import get_current_user
+from app.core.security import get_current_user, get_current_user_required
 from app.models import models
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+@router.get("/me", response_model=schemas.UserOut)
+def get_current_user_info(
+    current_user: models.User = Depends(get_current_user_required)
+):
+    return current_user
 
 @router.get("/{user_id}", response_model=schemas.UserOut)
 def read_user(

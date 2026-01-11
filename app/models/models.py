@@ -41,6 +41,7 @@ class Question(Base):
     time_limit = Column(Integer, nullable=True)
     order_index = Column(Integer, nullable=False)
     media_id = Column(Integer, ForeignKey("media.id"), nullable=True)
+    score = Column(Integer, nullable=True)
 
     quiz = relationship("Quiz", back_populates="questions")
     answers = relationship("Answer", back_populates="question", cascade="all, delete-orphan")

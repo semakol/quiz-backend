@@ -153,7 +153,20 @@ async def websocket_endpoint(
         
         try:
             while True:
-                data = await websocket.receive_json()
+                try:
+                    data = await websocket.receive_json()
+                except WebSocketDisconnect:
+                    # Нормальное отключение - выходим из цикла
+                    break
+                except Exception as e:
+                    # Если ошибка при получении сообщения (например, некорректный JSON)
+                    # и это не разрыв соединения, пропускаем итерацию
+                    error_msg = str(e)
+                    if "disconnect" in error_msg.lower() or "Cannot call" in error_msg:
+                        # Соединение разорвано - выходим из цикла
+                        break
+                    print(f"Ошибка при получении сообщения: {e}")
+                    continue
                 
                 message_type = data.get("type")
                 
@@ -173,24 +186,31 @@ async def websocket_endpoint(
                         }
                     })
                 elif message_type == "get_players_list":
-                    # Разрешаем получение списка игроков всем участникам сессии
-                    players = db.query(models.SessionPlayer).filter(
-                        models.SessionPlayer.session_id == session.id
-                    ).all()
-                    players_data = []
-                    for player in players:
-                        player_user = db.query(models.User).filter(models.User.id == player.user_id).first()
-                        players_data.append({
-                            "id": player.id,
-                            "user_id": player.user_id,
-                            "nickname": player.nickname or (player_user.username if player_user else None),
-                            "username": player_user.username if player_user else None,
-                            "score": player.score or 0
+                    try:
+                        # Разрешаем получение списка игроков всем участникам сессии
+                        players = db.query(models.SessionPlayer).filter(
+                            models.SessionPlayer.session_id == session.id
+                        ).all()
+                        players_data = []
+                        for player in players:
+                            player_user = db.query(models.User).filter(models.User.id == player.user_id).first()
+                            players_data.append({
+                                "id": player.id,
+                                "user_id": player.user_id,
+                                "nickname": player.nickname or (player_user.username if player_user else None),
+                                "username": player_user.username if player_user else None,
+                                "score": player.score or 0
+                            })
+                        await websocket.send_json({
+                            "type": "players_list",
+                            "players": players_data
                         })
-                    await websocket.send_json({
-                        "type": "players_list",
-                        "players": players_data
-                    })
+                    except Exception as e:
+                        db.rollback()
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": f"Ошибка при получении списка игроков: {str(e)}"
+                        })
                 elif message_type == "chat_message":
                     # Обработка сообщения чата - транслируем всем участникам сессии
                     text = data.get("text", "").strip()
@@ -261,12 +281,30 @@ async def websocket_endpoint(
                         
                         is_correct = None
                         if answer_id:
+                            # Для тестовых вопросов проверяем правильность выбранного ответа
                             answer = db.query(models.Answer).filter(
                                 models.Answer.id == answer_id,
                                 models.Answer.question_id == question_id
                             ).first()
                             if answer:
                                 is_correct = answer.is_correct
+                        elif text_answer:
+                            # Для открытых вопросов проверяем, есть ли правильный ответ в базе
+                            # Если есть правильные ответы, сравниваем с ними (регистронезависимо)
+                            correct_answers = db.query(models.Answer).filter(
+                                models.Answer.question_id == question_id,
+                                models.Answer.is_correct == True
+                            ).all()
+                            if correct_answers:
+                                # Сравниваем текст ответа с правильными ответами
+                                text_answer_normalized = text_answer.strip().lower()
+                                is_correct = any(
+                                    ans.text.strip().lower() == text_answer_normalized 
+                                    for ans in correct_answers
+                                )
+                            else:
+                                # Если нет правильных ответов в базе, считаем ответ неправильным
+                                is_correct = False
                         
                         existing_answer = db.query(models.PlayerAnswer).filter(
                             models.PlayerAnswer.session_player_id == session_player.id,
@@ -289,16 +327,27 @@ async def websocket_endpoint(
                         )
                         db.add(player_answer)
                         
-                        if is_correct:
-                            session_player.score = (session_player.score or 0) + 1
+                        question_score = None
+                        # Начисляем баллы только если ответ правильный (is_correct == True)
+                        if is_correct is True:
+                            # Используем score вопроса, если он задан, иначе 1 по умолчанию
+                            question_score = question.score if question.score is not None else 1
+                            old_score = session_player.score or 0
+                            session_player.score = old_score + question_score
                             db.add(session_player)
+                            print(f"Начислено {question_score} баллов игроку {session_player.id}. Старый счет: {old_score}, новый счет: {session_player.score}")
+                        elif is_correct is None:
+                            print(f"Предупреждение: is_correct = None для вопроса {question_id}, ответа {answer_id}, текста '{text_answer}'")
                         
                         db.commit()
+                        db.refresh(session_player)
                         
                         await websocket.send_json({
                             "type": "answer_submitted",
                             "question_id": question_id,
-                            "is_correct": is_correct
+                            "is_correct": is_correct,
+                            "score": question_score if is_correct else None,
+                            "total_score": session_player.score or 0
                         })
                         
                         await manager.broadcast(session_url, {
@@ -315,48 +364,62 @@ async def websocket_endpoint(
                             "message": f"Ошибка при сохранении ответа: {str(e)}"
                     })
                 elif message_type == "start_game" and is_host:
-                    session.status = "active"
-                    db.add(session)
-                    db.commit()
-                    db.refresh(session)
-                    await manager.broadcast(session_url, {
-                        "type": "game_started",
-                        "session_id": session.id
-                    })
-                    await websocket.send_json({
-                        "type": "status_updated",
-                        "status": session.status
-                    })
-                    players = db.query(models.SessionPlayer).filter(
-                        models.SessionPlayer.session_id == session.id
-                    ).all()
-                    players_data = []
-                    for player in players:
-                        player_user = db.query(models.User).filter(models.User.id == player.user_id).first()
-                        players_data.append({
-                            "id": player.id,
-                            "user_id": player.user_id,
-                            "nickname": player.nickname or (player_user.username if player_user else None),
-                            "username": player_user.username if player_user else None,
-                            "score": player.score or 0
+                    try:
+                        session.status = "active"
+                        db.add(session)
+                        db.commit()
+                        db.refresh(session)
+                        await manager.broadcast(session_url, {
+                            "type": "game_started",
+                            "session_id": session.id
                         })
-                    await websocket.send_json({
-                        "type": "players_list",
-                        "players": players_data
-                    })
+                        await websocket.send_json({
+                            "type": "status_updated",
+                            "status": session.status
+                        })
+                        players = db.query(models.SessionPlayer).filter(
+                            models.SessionPlayer.session_id == session.id
+                        ).all()
+                        players_data = []
+                        for player in players:
+                            player_user = db.query(models.User).filter(models.User.id == player.user_id).first()
+                            players_data.append({
+                                "id": player.id,
+                                "user_id": player.user_id,
+                                "nickname": player.nickname or (player_user.username if player_user else None),
+                                "username": player_user.username if player_user else None,
+                                "score": player.score or 0
+                            })
+                        await websocket.send_json({
+                            "type": "players_list",
+                            "players": players_data
+                        })
+                    except Exception as e:
+                        db.rollback()
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": f"Ошибка при запуске игры: {str(e)}"
+                        })
                 elif message_type == "pause_game" and is_host:
-                    session.status = "paused"
-                    db.add(session)
-                    db.commit()
-                    db.refresh(session)
-                    await manager.broadcast(session_url, {
-                        "type": "game_paused",
-                        "session_id": session.id
-                    })
-                    await websocket.send_json({
-                        "type": "status_updated",
-                        "status": session.status
-                    })
+                    try:
+                        session.status = "paused"
+                        db.add(session)
+                        db.commit()
+                        db.refresh(session)
+                        await manager.broadcast(session_url, {
+                            "type": "game_paused",
+                            "session_id": session.id
+                        })
+                        await websocket.send_json({
+                            "type": "status_updated",
+                            "status": session.status
+                        })
+                    except Exception as e:
+                        db.rollback()
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": f"Ошибка при паузе игры: {str(e)}"
+                        })
                 elif message_type == "next_question" and is_host:
                     try:
                         question = crud.set_next_question(db, session.id, user)
@@ -371,27 +434,50 @@ async def websocket_endpoint(
                             "question_id": question.id
                         })
                     except Exception as e:
+                        db.rollback()
                         await websocket.send_json({
                             "type": "error",
                             "message": f"Ошибка при переходе к следующему вопросу: {str(e)}"
-                    })
+                        })
                 elif message_type == "end_game" and is_host:
-                    session.status = "ended"
-                    db.add(session)
-                    db.commit()
-                    db.refresh(session)
-                    await manager.broadcast(session_url, {
-                        "type": "game_ended",
-                        "session_id": session.id
-                    })
-                    await websocket.send_json({
-                        "type": "status_updated",
-                        "status": session.status
-                    })
+                    try:
+                        session.status = "ended"
+                        db.add(session)
+                        db.commit()
+                        db.refresh(session)
+                        await manager.broadcast(session_url, {
+                            "type": "game_ended",
+                            "session_id": session.id
+                        })
+                        await websocket.send_json({
+                            "type": "status_updated",
+                            "status": session.status
+                        })
+                    except Exception as e:
+                        db.rollback()
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": f"Ошибка при завершении игры: {str(e)}"
+                        })
                 else:
                     await manager.broadcast(session_url, data)
                     
         except WebSocketDisconnect:
+            pass  # Нормальное отключение
+        except Exception as e:
+            # Обработка любых других ошибок
+            print(f"Необработанная ошибка в WebSocket: {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            try:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": f"Произошла ошибка: {str(e)}"
+                })
+            except Exception:
+                pass  # Если WebSocket уже закрыт, игнорируем
             manager.disconnect(session_url, websocket)
             await manager.broadcast(session_url, {
                 "type": "players_updated",
