@@ -19,12 +19,11 @@ def get_s3_client():
     if _s3_client is None:
         try:
             _s3_client = boto3.client(
-                's3',
+                service_name='s3',
                 endpoint_url=settings.YANDEX_STORAGE_ENDPOINT,
                 aws_access_key_id=settings.YANDEX_STORAGE_ACCESS_KEY,
                 aws_secret_access_key=settings.YANDEX_STORAGE_SECRET_KEY,
                 region_name=settings.YANDEX_STORAGE_REGION,
-                config=Config(signature_version='s3v4')
             )
             logger.info("S3 client initialized for Yandex Object Storage")
         except Exception as e:

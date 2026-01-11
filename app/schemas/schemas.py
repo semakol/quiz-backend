@@ -110,6 +110,37 @@ class SessionCreate(BaseModel):
     url: str
     status: str
 
+class SessionOut(BaseModel):
+    id: int
+    quiz_id: int
+    host_id: int
+    url: str
+    started_at: Optional[datetime]
+    ended_at: Optional[datetime]
+    status: str
+    current_question_id: Optional[int] = None
+
+    class Config:
+        model_config = {"from_attributes": True}
+
+class SessionPlayerOut(BaseModel):
+    id: int
+    nickname: Optional[str]
+    score: Optional[int]
+    joined_at: Optional[datetime]
+
+    class Config:
+        model_config = {"from_attributes": True}
+
+class SessionStatistics(BaseModel):
+    session_id: int
+    started_at: Optional[datetime]
+    ended_at: Optional[datetime]
+    players: List[SessionPlayerOut]
+
+    class Config:
+        model_config = {"from_attributes": True}
+
 class SessionPlayerCreate(BaseModel):
     session_id: int
     user_id: Optional[int]

@@ -126,23 +126,24 @@ async def websocket_endpoint(
                     "current_question_id": session.current_question_id
                 }
             })
-            
-            players = db.query(models.SessionPlayer).filter(
-                models.SessionPlayer.session_id == session.id
-            ).all()
-            players_data = []
-            for player in players:
-                player_user = db.query(models.User).filter(models.User.id == player.user_id).first()
-                players_data.append({
-                    "id": player.id,
-                    "user_id": player.user_id,
-                    "nickname": player.nickname or (player_user.username if player_user else None),
-                    "username": player_user.username if player_user else None,
-                    "score": player.score or 0
-                })
-            await websocket.send_json({
-                "type": "players_list",
-                "players": players_data
+        
+        # Отправляем список игроков всем участникам (и хосту, и игрокам)
+        players = db.query(models.SessionPlayer).filter(
+            models.SessionPlayer.session_id == session.id
+        ).all()
+        players_data = []
+        for player in players:
+            player_user = db.query(models.User).filter(models.User.id == player.user_id).first()
+            players_data.append({
+                "id": player.id,
+                "user_id": player.user_id,
+                "nickname": player.nickname or (player_user.username if player_user else None),
+                "username": player_user.username if player_user else None,
+                "score": player.score or 0
+            })
+        await websocket.send_json({
+            "type": "players_list",
+            "players": players_data
         })
         
         await manager.broadcast(session_url, {
@@ -171,7 +172,8 @@ async def websocket_endpoint(
                             "current_question_id": session.current_question_id
                         }
                     })
-                elif message_type == "get_players_list" and is_host:
+                elif message_type == "get_players_list":
+                    # Разрешаем получение списка игроков всем участникам сессии
                     players = db.query(models.SessionPlayer).filter(
                         models.SessionPlayer.session_id == session.id
                     ).all()
@@ -189,6 +191,21 @@ async def websocket_endpoint(
                         "type": "players_list",
                         "players": players_data
                     })
+                elif message_type == "chat_message":
+                    # Обработка сообщения чата - транслируем всем участникам сессии
+                    text = data.get("text", "").strip()
+                    if text and len(text) <= 500:
+                        # Транслируем сообщение всем участникам сессии
+                        await manager.broadcast(session_url, {
+                            "type": "chat_message",
+                            "username": user.username,
+                            "text": text
+                        })
+                    elif len(text) > 500:
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": "Сообщение слишком длинное (максимум 500 символов)"
+                        })
                 elif message_type == "submit_answer":
                     try:
                         if is_host:

@@ -283,6 +283,30 @@ def create_session(db: Session, s_in: schemas.SessionCreate, current_user: model
     db.refresh(s)
     return s
 
+def list_sessions(db: Session, current_user: models.User, skip: int = 0, limit: int = 100) -> List[models.SessionGame]:
+    if not current_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required"
+        )
+    # Возвращаем только сессии, созданные текущим пользователем (host_id)
+    return db.query(models.SessionGame).filter(
+        models.SessionGame.host_id == current_user.id
+    ).order_by(models.SessionGame.started_at.desc()).offset(skip).limit(limit).all()
+
+def list_ended_sessions(db: Session, current_user: models.User, skip: int = 0, limit: int = 100) -> List[models.SessionGame]:
+    if not current_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required"
+        )
+    # Возвращаем только завершенные сессии, созданные текущим пользователем
+    # Используем started_at для сортировки (ended_at может быть NULL)
+    return db.query(models.SessionGame).filter(
+        models.SessionGame.host_id == current_user.id,
+        models.SessionGame.status == 'ended'
+    ).order_by(models.SessionGame.started_at.desc()).offset(skip).limit(limit).all()
+
 def get_session(db: Session, session_id: int, current_user: models.User) -> Optional[models.SessionGame]:
     if not current_user:
         raise HTTPException(
@@ -349,6 +373,45 @@ def add_rule_to_session(db: Session, session_id: int, current_user: models.User)
     db.commit()
     db.refresh(session)
     return session
+
+def get_session_statistics(db: Session, session_id: int, current_user: models.User) -> Optional[dict]:
+    if not current_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required"
+        )
+    session = db.get(models.SessionGame, session_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found"
+        )
+    if session.host_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    # Получаем всех игроков сессии
+    players = db.query(models.SessionPlayer).filter(
+        models.SessionPlayer.session_id == session_id
+    ).all()
+    
+    players_data = []
+    for player in players:
+        players_data.append({
+            "id": player.id,
+            "nickname": player.nickname or f"Игрок #{player.id}",
+            "score": player.score or 0,
+            "joined_at": player.joined_at
+        })
+    
+    return {
+        "session_id": session.id,
+        "started_at": session.started_at,
+        "ended_at": session.ended_at,
+        "players": players_data
+    }
 
 def get_current_question(db: Session, session_id: int, current_user: models.User) -> Optional[models.Question]:
     if not current_user:
