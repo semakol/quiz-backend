@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Панель ведущего</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https:
+    <link rel="preconnect" href="https:
+    <link href="https:
+</head>
+<body>
+    <div class="page">
+        <!-- Декоративный фон -->
+        <div class="page__background"></div>
+
+        <!-- Шапка -->
+        <header class="header">
+            <h1 class="header__title">Панель ведущего</h1>
+            <div class="header__line"></div>
+        </header>
+
+        <!-- Навигация -->
+        <nav class="nav">
+            <a href="#" class="nav__link nav__link--active" data-tab="broadcasts">Трансляции</a>
+            <a href="#" class="nav__link" data-tab="quizzes">Квизы</a>
+            <a href="#" class="nav__link" data-tab="statistics">Статистика</a>
+        </nav>
+
+        <!-- Индикатор активной вкладки -->
+        <div class="tab-indicator" data-active="broadcasts">
+            <div class="tab-indicator__bg"></div>
+            <div class="tab-indicator__active"></div>
+        </div>
+
+        <!-- Карточки трансляций -->
+        <div class="broadcast-cards" data-tab-content="broadcasts">
+            <!-- Карточки загружаются динамически из API -->
+        </div>
+
+        <!-- Карточки квизов -->
+        <div class="broadcast-cards" data-tab-content="quizzes" style="display: none;">
+            <!-- Карточка квиза 1 -->
+            <article class="broadcast-card quiz-card">
+                <div class="broadcast-card__bg"></div>
+                <button class="broadcast-card__close" aria-label="Закрыть карточку">
+                    <img src="img/close-icon.svg" alt="" class="broadcast-card__close-icon">
+                </button>
+                
+                <div class="broadcast-card__play-wrapper">
+                    <img src="img/Warning.svg" alt="" class="quiz-card__icon">
+                </div>
+
+                <h3 class="broadcast-card__title">Квиз</h3>
+                <p class="broadcast-card__date">n вопросов</p>
+                <p class="broadcast-card__description">оаоиолыивлиаоивмровиу.</p>
+
+                <div class="broadcast-card__pattern">
+                    <img src="img/card-pattern.svg" alt="" class="broadcast-card__pattern-image">
+                </div>
+
+                <div class="broadcast-card__actions">
+                    <button class="button button--primary" data-action="edit-quiz" data-quiz-id="1">Просмотр</button>
+                    <button class="button button--secondary" data-action="edit-quiz" data-quiz-id="1">Изменить</button>
+                </div>
+            </article>
+
+            <!-- Карточка квиза 2 -->
+            <article class="broadcast-card quiz-card">
+                <div class="broadcast-card__bg"></div>
+                <button class="broadcast-card__close" aria-label="Закрыть карточку">
+                    <img src="img/close-icon.svg" alt="" class="broadcast-card__close-icon">
+                </button>
+                
+                <div class="broadcast-card__play-wrapper">
+                    <img src="img/Warning.svg" alt="" class="quiz-card__icon">
+                </div>
+
+                <h3 class="broadcast-card__title">Квиз</h3>
+                <p class="broadcast-card__date">n вопросов</p>
+                <p class="broadcast-card__description">оаоиолыивлиаоивмровиу.</p>
+
+                <div class="broadcast-card__pattern">
+                    <img src="img/card-pattern.svg" alt="" class="broadcast-card__pattern-image">
+                </div>
+
+                <div class="broadcast-card__actions">
+                    <button class="button button--primary" data-action="edit-quiz" data-quiz-id="1">Просмотр</button>
+                    <button class="button button--secondary" data-action="edit-quiz" data-quiz-id="1">Изменить</button>
+                </div>
+            </article>
+        </div>
+
+        <!-- Карточки статистики -->
+        <div class="broadcast-cards" data-tab-content="statistics" style="display: none;">
+            <!-- Карточки загружаются динамически из API -->
+        </div>
+
+        <!-- Кнопки в шапке -->
+        <div class="header-actions">
+            <button class="button button--secondary button--header" data-modal="create-quiz">Создать квиз</button>
+            <button class="button button--primary button--header" data-modal="create-broadcast-new">Создать трансляцию</button>
+            <div class="user-icon" data-dropdown="user-menu">
+                <img src="img/user-icon.svg" alt="Профиль пользователя" class="user-icon__image">
+            </div>
+        </div>
+
+        <!-- Модальное окно: Создать трансляцию -->
+        <div class="modal" id="modal-create-broadcast">
+            <div class="modal__overlay"></div>
+            <div class="modal__content modal__content--create">
+                <form class="modal__form">
+                    <div class="form-group">
+                        <input type="text" class="form-input form-input--placeholder" placeholder="Название">
+                    </div>
+                    <div class="form-group">
+                        <textarea class="form-textarea form-textarea--placeholder" placeholder="Описание"></textarea>
+                    </div>
+                    <div class="modal__actions modal__actions--single">
+                        <button type="submit" class="button button--next">Далее</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Модальное окно: Создать квиз -->
+        <div class="modal" id="modal-create-quiz">
+            <div class="modal__overlay modal__overlay--hidden"></div>
+            <div class="modal__content modal__content--create-quiz">
+                <form class="modal__form">
+                    <div class="form-group">
+                        <input type="text" class="form-input form-input--placeholder" placeholder="Название">
+                    </div>
+                    <div class="form-group">
+                        <textarea class="form-textarea form-textarea--placeholder" placeholder="Описание"></textarea>
+                    </div>
+                    <div class="modal__actions modal__actions--single">
+                        <button type="submit" class="button button--next">Далее</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Модальное окно: Создать трансляцию -->
+        <div class="modal" id="modal-create-broadcast-new">
+            <div class="modal__overlay modal__overlay--hidden"></div>
+            <div class="modal__content modal__content--create-quiz">
+                <form class="modal__form" id="create-session-form">
+                    <div class="form-group">
+                        <label class="form-label">Выберите квиз:</label>
+                        <select class="form-input form-input--placeholder form-select" id="session-quiz-select" required>
+                            <option value="">Выберите квиз...</option>
+                        </select>
+                        <div class="form-error" id="quiz-select-error"></div>
+                    </div>
+                    <div class="modal__actions modal__actions--single">
+                        <button type="submit" class="button button--next">Создать сессию</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Выпадающий список квизов -->
+        <div class="dropdown" id="dropdown-quiz-list">
+            <div class="dropdown__content">
+                <div class="dropdown__item">Название 1</div>
+                <div class="dropdown__item">Название 2</div>
+                <div class="dropdown__item">Название 3</div>
+            </div>
+        </div>
+
+        <!-- Выпадающее меню пользователя -->
+        <div class="dropdown" id="dropdown-user-menu">
+            <div class="dropdown__content dropdown__content--user">
+                <div class="dropdown__user-item">
+                    <img src="img/Message_light.svg" alt="" class="dropdown__icon-svg">
+                    <span id="user-email">Email</span>
+                </div>
+                <div class="dropdown__user-item">
+                    <img src="img/User_scan_light.svg" alt="" class="dropdown__icon-svg">
+                    <span id="user-username"></span>
+                </div>
+                <div class="dropdown__divider">
+                    <img src="img/line-icon.svg" alt="" class="dropdown__divider-line">
+                </div>
+                <a href="login.html" class="dropdown__user-item dropdown__user-item--link">
+                    <img src="img/User_scan_light.svg" alt="" class="dropdown__icon-svg">
+                    <span>Войти</span>
+                </a>
+                <a href="register.html" class="dropdown__user-item dropdown__user-item--link">
+                    <img src="img/User_scan_light.svg" alt="" class="dropdown__icon-svg">
+                    <span>Регистрация</span>
+                </a>
+                <div class="dropdown__user-item">
+                    <img src="img/exit.svg" alt="" class="dropdown__icon-svg">
+                    <span>Выход</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="api.js"></script>
+    <script src="auth.js"></script>
+    <script>
+        
+        document.addEventListener('DOMContentLoaded', async function() {
+            if (requireAuth()) {
+                
+                const loginLink = document.querySelector('a[href="login.html"]');
+                const registerLink = document.querySelector('a[href="register.html"]');
+                if (loginLink && loginLink.closest('.dropdown__user-item')) {
+                    loginLink.closest('.dropdown__user-item').style.display = 'none';
+                }
+                if (registerLink && registerLink.closest('.dropdown__user-item')) {
+                    registerLink.closest('.dropdown__user-item').style.display = 'none';
+                }
+                
+                
+                try {
+                    if (typeof apiService !== 'undefined') {
+                        const user = await apiService.getCurrentUser();
+                        const emailElement = document.getElementById('user-email');
+                        const usernameElement = document.getElementById('user-username');
+                        
+                        if (emailElement && user.email) {
+                            emailElement.textContent = user.email;
+                        }
+                        if (usernameElement && user.username) {
+                            usernameElement.textContent = user.username;
+                        }
+                    }
+                } catch (error) {
+                    console.error('Ошибка при загрузке данных пользователя:', error);
+                }
+            }
+        });
+    </script>
+    <script src="cards.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
+

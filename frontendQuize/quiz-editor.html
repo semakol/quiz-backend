@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Редактор квиза</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https:
+    <link rel="preconnect" href="https:
+    <link href="https:
+</head>
+<body>
+    <div class="page">
+        <!-- Декоративный фон -->
+        <div class="page__background"></div>
+
+        <!-- Шапка -->
+        <header class="header quiz-editor-header">
+            <button class="quiz-editor__back" id="back-button" aria-label="Назад">
+                <img src="img/back.svg" alt="Назад" class="quiz-editor__back-icon">
+            </button>
+            <h1 class="header__title quiz-editor__title" id="quiz-title-header">Название квиза</h1>
+            <div class="header__line"></div>
+            <div class="quiz-editor-header__actions">
+                <div class="quiz-editor-header__dropdown-wrapper">
+                    <button class="button button--primary quiz-editor-header__add-button" id="add-question-button">
+                        Добавить вопрос
+                        <img src="img/arrow-down.svg" alt="" class="quiz-editor-header__arrow">
+                    </button>
+                    <div class="dropdown quiz-editor-header__dropdown" id="question-type-dropdown">
+                        <div class="dropdown__content quiz-editor-header__dropdown-content">
+                            <div class="dropdown__item quiz-editor-header__dropdown-item" data-question-type="open">
+                                <img src="img/Note_Edit.svg" alt="" class="quiz-editor-header__dropdown-icon">
+                                <span>Открытый</span>
+                            </div>
+                            <div class="dropdown__item quiz-editor-header__dropdown-item" data-question-type="test">
+                                <img src="img/Hamburger_MD.svg" alt="" class="quiz-editor-header__dropdown-icon">
+                                <span>Тестовый</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <button class="button button--secondary quiz-editor-header__save-button" id="save-quiz-button">Сохранить</button>
+            </div>
+        </header>
+
+        <!-- Контент редактора -->
+        <main class="quiz-editor">
+            <div class="questions-list" id="questions-list">
+                <!-- Вопросы будут добавляться динамически -->
+            </div>
+        </main>
+
+    </div>
+    <script src="api.js"></script>
+    <script src="auth.js"></script>
+    <script>
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            requireAuth();
+        });
+    </script>
+    <script src="quiz-editor.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
+
+

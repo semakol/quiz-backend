@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Игровая сессия</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https:
+    <link rel="preconnect" href="https:
+    <link href="https:
+</head>
+<body>
+    <div class="page">
+        <div class="page__background"></div>
+
+        <header class="header session-header">
+            <button class="session-header__back" id="back-button" aria-label="Назад">
+                <img src="img/back.svg" alt="Назад" class="session-header__back-icon">
+            </button>
+            <h1 class="header__title session-header__title" id="session-title">Игровая сессия</h1>
+            <div class="header__line"></div>
+            <div class="session-header__actions">
+                <button class="button button--secondary session-header__action-button" id="copy-url-button">Копировать ссылку</button>
+                <div class="session-header__status" id="session-status">
+                    <span class="session-header__status-label">Статус:</span>
+                    <span class="session-header__status-value" id="status-value">Ожидание</span>
+                </div>
+            </div>
+        </header>
+
+        <main class="session-content">
+            <aside class="session-panel session-panel--left">
+                <section class="session-info-card">
+                    <h2 class="session-info-card__title">Информация о сессии</h2>
+                    <div class="session-info-item">
+                        <span class="session-info-item__label">URL сессии:</span>
+                        <div class="session-info-item__value session-info-item__value--url" id="session-url">Загрузка...</div>
+                    </div>
+                    <div class="session-info-item">
+                        <span class="session-info-item__label">Квиз:</span>
+                        <div class="session-info-item__value" id="quiz-name">Загрузка...</div>
+                    </div>
+                    <div class="session-info-item">
+                        <span class="session-info-item__label">Создана:</span>
+                        <div class="session-info-item__value" id="session-created">Загрузка...</div>
+                    </div>
+                    <div class="session-info-item">
+                        <span class="session-info-item__label">Подключено игроков:</span>
+                        <div class="session-info-item__value" id="players-count">0</div>
+                    </div>
+                </section>
+
+                <section class="session-players-card">
+                    <h2 class="session-players-card__title">Игроки</h2>
+                    <div class="session-players-list" id="players-list">
+                        <div class="session-players-empty">Пока нет подключенных игроков</div>
+                    </div>
+                </section>
+
+                <section class="session-chat-card">
+                    <h2 class="session-chat-card__title">Чат</h2>
+                    <div class="session-chat-messages" id="chat-messages">
+                        <div class="session-chat-empty">Сообщений пока нет</div>
+                    </div>
+                    <div class="session-chat-input">
+                        <input type="text" class="session-chat-input__field" id="chat-input" placeholder="Введите сообщение..." maxlength="500">
+                        <button class="button button--primary session-chat-input__send" id="chat-send">Отправить</button>
+                    </div>
+                </section>
+            </aside>
+
+            <div class="session-panel session-panel--center">
+                <section class="session-controls-wrapper">
+                    <div class="session-controls">
+                        <button class="button button--primary session-controls__button" id="start-button" disabled>Начать игру</button>
+                        <button class="button button--secondary session-controls__button" id="next-question-button" disabled>Следующий вопрос</button>
+                        <button class="button button--secondary session-controls__button" id="end-button">Завершить сессию</button>
+                    </div>
+                </section>
+
+                <section class="session-stream-card">
+                    <h2 class="session-stream-card__title">Видео ведущего</h2>
+                    <div class="session-stream-container">
+                        <div class="session-stream-video" id="host-video-container">
+                            <img src="img/user-icon.svg" alt="Видео ведущего" class="session-stream-video__placeholder" id="host-video">
+                        </div>
+                        <div class="session-stream-controls">
+                            <button class="button button--secondary session-stream-controls__button" id="toggle-camera-button">
+                                <span class="session-stream-controls__button-text">Выключить камеру</span>
+                            </button>
+                            <button class="button button--secondary session-stream-controls__button" id="toggle-microphone-button">
+                                <span class="session-stream-controls__button-text">Выключить микрофон</span>
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="session-question-card" id="question-card" style="display: none;">
+                    <h2 class="session-question-card__title">Текущий вопрос</h2>
+                    <div class="session-question-content">
+                        <div class="session-question-text" id="question-text">Вопрос не выбран</div>
+                        <div class="session-question-media" id="question-media" style="display: none;"></div>
+                        <div class="session-question-info" id="question-info"></div>
+                    </div>
+                </section>
+
+                <section class="session-stats-card" id="stats-card" style="display: none;">
+                    <h2 class="session-stats-card__title">Статистика ответов</h2>
+                    <div class="session-stats-content" id="stats-content"></div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <script src="api.js"></script>
+    <script src="auth.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            requireAuth();
+        });
+    </script>
+    <script src="session.js"></script>
+</body>
+</html>

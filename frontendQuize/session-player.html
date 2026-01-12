@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Игровая сессия</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https:
+    <link rel="preconnect" href="https:
+    <link href="https:
+</head>
+<body>
+    <div class="page page--player">
+        <!-- Декоративный фон -->
+        <div class="page__background"></div>
+
+        <!-- Контейнер игрока -->
+        <div class="player-container">
+            <!-- Экран ожидания -->
+            <div class="player-waiting" id="waiting-screen">
+                <div class="player-waiting-card">
+                    <h1 class="player-waiting__title">Ожидание начала игры</h1>
+                    <p class="player-waiting__message" id="waiting-message">Подключение к сессии...</p>
+                    <div class="player-waiting__spinner"></div>
+                </div>
+            </div>
+
+            <!-- Экран игры -->
+            <div class="player-game" id="game-screen" style="display: none;">
+                <!-- Объединенная карточка с вопросом и участниками -->
+                <div class="player-main-card">
+                    <!-- Заголовок с счетом и таймером -->
+                    <div class="player-main-card__header">
+                        <div class="player-game__score">
+                            <span class="player-game__score-label">Ваш счет:</span>
+                            <span class="player-game__score-value" id="player-score">0</span>
+                        </div>
+                        <div class="player-game__timer" id="timer-container" style="display: none;">
+                            <span class="player-game__timer-label">Время:</span>
+                            <span class="player-game__timer-value" id="timer-value">0</span>
+                        </div>
+                    </div>
+
+                    <!-- Контент карточки -->
+                    <div class="player-main-card__content">
+                        <!-- Левая часть: вопрос и ответы -->
+                        <div class="player-main-card__left">
+                            <!-- Вопрос -->
+                            <div class="player-question-section" id="question-card">
+                                <h2 class="player-question-section__title">Вопрос</h2>
+                                <div class="player-question-section__text" id="question-text">
+                                    Ожидание вопроса...
+                                </div>
+                                <!-- Медиа для вопроса -->
+                                <div class="player-question-media" id="question-media" style="display: none;">
+                                    <!-- Медиа будет добавлено динамически -->
+                                </div>
+                            </div>
+
+                            <!-- Варианты ответов (для тестовых вопросов) -->
+                            <div class="player-answers" id="test-answers" style="display: none;">
+                                <!-- Варианты ответов будут добавлены динамически -->
+                            </div>
+
+                            <!-- Поле для ответа (для открытых вопросов) -->
+                            <div class="player-answer-open" id="open-answer" style="display: none;">
+                                <textarea 
+                                    class="player-answer-open__input" 
+                                    id="open-answer-input"
+                                    placeholder="Введите ваш ответ..."
+                                    rows="3"
+                                ></textarea>
+                                <button class="button button--primary player-answer-open__submit" id="submit-open-answer">
+                                    Отправить ответ
+                                </button>
+                            </div>
+
+                            <!-- Кнопка отправки ответа для тестовых вопросов -->
+                            <div class="player-answer-actions" id="test-answer-actions" style="display: none;">
+                                <button class="button button--primary player-answer-actions__submit" id="submit-test-answer">
+                                    Отправить ответ
+                                </button>
+                            </div>
+
+                            <!-- Результат ответа -->
+                            <div class="player-result" id="answer-result" style="display: none;">
+                                <div class="player-result__message" id="result-message"></div>
+                            </div>
+                        </div>
+
+                        <!-- Правая часть: список участников и чат -->
+                        <div class="player-main-card__right">
+                            <div class="player-players-section">
+                                <h2 class="player-players-section__title">Участники</h2>
+                                <div class="player-players-list" id="player-players-list">
+                                    <div class="player-players-empty">Загрузка списка участников...</div>
+                                </div>
+                            </div>
+                            
+                            <!-- Чат -->
+                            <div class="player-chat-section">
+                                <h2 class="player-chat-section__title">Чат</h2>
+                                <div class="player-chat-messages" id="chat-messages">
+                                    <div class="player-chat-empty">Сообщений пока нет</div>
+                                </div>
+                                <div class="player-chat-input">
+                                    <input 
+                                        type="text" 
+                                        class="player-chat-input__field" 
+                                        id="chat-input"
+                                        placeholder="Введите сообщение..."
+                                        maxlength="500"
+                                    >
+                                    <button class="button button--primary player-chat-input__send" id="chat-send">
+                                        Отправить
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Экран результатов -->
+            <div class="player-results" id="results-screen" style="display: none;">
+                <div class="player-results-card">
+                    <h1 class="player-results-card__title">Игра завершена!</h1>
+                    <div class="player-results-card__score">
+                        <span class="player-results-card__score-label">Ваш итоговый счет:</span>
+                        <span class="player-results-card__score-value" id="final-score">0</span>
+                    </div>
+                    <div class="player-results-card__leaderboard" id="leaderboard">
+                        <!-- Таблица лидеров будет добавлена динамически -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="api.js"></script>
+    <script src="auth.js"></script>
+    <script>
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            if (!isAuthenticated()) {
+                
+                sessionStorage.setItem('returnUrl', window.location.href);
+                window.location.href = 'login.html';
+            }
+        });
+    </script>
+    <script src="session-player.js"></script>
+</body>
+</html>
+
