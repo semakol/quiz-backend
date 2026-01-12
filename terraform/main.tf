@@ -65,6 +65,13 @@ resource "yandex_vpc_security_group" "vm_security_group" {
     v4_cidr_blocks = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
   }
 
+  ingress {
+    protocol       = "TCP"
+    description    = "Network Load Balancer healthchecks"
+    v4_cidr_blocks = ["198.18.235.0/24", "198.18.248.0/24"]
+    port           = 80
+  }
+
   egress {
     protocol       = "ANY"
     description    = "Исходящий трафик"
@@ -95,7 +102,7 @@ resource "yandex_compute_instance" "vm" {
 
   network_interface {
     subnet_id          = yandex_vpc_subnet.subnets[count.index].id
-    nat                = true
+    nat                = false
     security_group_ids = [yandex_vpc_security_group.vm_security_group.id]
   }
 
@@ -110,7 +117,6 @@ resource "yandex_compute_instance" "vm" {
           content: |
             ${join("\n            ", [for key, value in var.env_vars : "${key}=${value}"])}
       runcmd:
-        - mkdir -p /svr/quiz-backend
         - chmod 777 ${var.env_file_path}
       EOF
   }
@@ -159,7 +165,7 @@ resource "yandex_lb_network_load_balancer" "load_balancer" {
       unhealthy_threshold = 2
       http_options {
         port = var.lb_backend_port
-        path = "/api/health"
+        path = "/health"
       }
     }
   }
