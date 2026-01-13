@@ -82,13 +82,20 @@
                     <h2 class="session-stream-card__title">Видео ведущего</h2>
                     <div class="session-stream-container">
                         <div class="session-stream-video" id="host-video-container">
-                            <img src="img/user-icon.svg" alt="Видео ведущего" class="session-stream-video__placeholder" id="host-video">
+                            <video id="host-video" autoplay muted playsinline style="width: 100%; height: 100%; object-fit: cover; display: none;"></video>
+                            <img src="img/user-icon.svg" alt="Видео ведущего" class="session-stream-video__placeholder" id="host-video-placeholder">
                         </div>
                         <div class="session-stream-controls">
-                            <button class="button button--secondary session-stream-controls__button" id="toggle-camera-button">
+                            <button class="button button--primary session-stream-controls__button" id="start-stream-button">
+                                <span class="session-stream-controls__button-text">Начать трансляцию</span>
+                            </button>
+                            <button class="button button--secondary session-stream-controls__button" id="stop-stream-button" style="display: none;">
+                                <span class="session-stream-controls__button-text">Остановить трансляцию</span>
+                            </button>
+                            <button class="button button--secondary session-stream-controls__button" id="toggle-camera-button" style="display: none;">
                                 <span class="session-stream-controls__button-text">Выключить камеру</span>
                             </button>
-                            <button class="button button--secondary session-stream-controls__button" id="toggle-microphone-button">
+                            <button class="button button--secondary session-stream-controls__button" id="toggle-microphone-button" style="display: none;">
                                 <span class="session-stream-controls__button-text">Выключить микрофон</span>
                             </button>
                         </div>

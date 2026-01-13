@@ -1,6 +1,7 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Query
 from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
+import logging
 from app.core.security import verify_token
 from app.services import crud
 from app.db.session import SessionLocal
@@ -8,11 +9,14 @@ from app.models import models
 from app.core.config import settings
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, List[WebSocket]] = {}
         self.connection_users: Dict[WebSocket, models.User] = {}
+        self.webrtc_hosts: Dict[str, WebSocket] = {}  # session_url -> host websocket
+        self.webrtc_viewers: Dict[str, List[WebSocket]] = {}  # session_url -> list of viewer websockets
 
     async def connect(self, session_url: str, websocket: WebSocket, user: models.User):
         await websocket.accept()
@@ -25,6 +29,16 @@ class ConnectionManager:
             conns.remove(websocket)
         if websocket in self.connection_users:
             del self.connection_users[websocket]
+        # Удаляем из WebRTC структур
+        if session_url in self.webrtc_hosts and self.webrtc_hosts[session_url] == websocket:
+            viewers_count = len(self.webrtc_viewers.get(session_url, []))
+            del self.webrtc_hosts[session_url]
+            logger.info(f"[WebRTC] Источник отключен от сессии {session_url}. Осталось зрителей: {viewers_count}")
+        if session_url in self.webrtc_viewers:
+            if websocket in self.webrtc_viewers[session_url]:
+                self.webrtc_viewers[session_url].remove(websocket)
+                viewers_count = len(self.webrtc_viewers[session_url])
+                logger.info(f"[WebRTC] Зритель отключен от сессии {session_url}. Осталось зрителей: {viewers_count}")
 
     async def broadcast(self, session_url: str, message: dict):
         conns = list(self.active_connections.get(session_url, []))
@@ -33,6 +47,39 @@ class ConnectionManager:
                 await conn.send_json(message)
             except Exception:
                 self.disconnect(session_url, conn)
+
+    def register_webrtc_host(self, session_url: str, websocket: WebSocket):
+        """Регистрация источника WebRTC (ведущий)"""
+        self.webrtc_hosts[session_url] = websocket
+        viewers_count = len(self.webrtc_viewers.get(session_url, []))
+        logger.info(f"[WebRTC] Источник зарегистрирован для сессии {session_url}. Активных зрителей: {viewers_count}")
+
+    def register_webrtc_viewer(self, session_url: str, websocket: WebSocket):
+        """Регистрация зрителя WebRTC"""
+        if session_url not in self.webrtc_viewers:
+            self.webrtc_viewers[session_url] = []
+        if websocket not in self.webrtc_viewers[session_url]:
+            self.webrtc_viewers[session_url].append(websocket)
+            viewers_count = len(self.webrtc_viewers[session_url])
+            has_host = session_url in self.webrtc_hosts
+            logger.info(f"[WebRTC] Зритель подключен к сессии {session_url}. Всего зрителей: {viewers_count}, Источник активен: {has_host}")
+
+    async def send_to_host(self, session_url: str, message: dict):
+        """Отправка сообщения источнику"""
+        if session_url in self.webrtc_hosts:
+            try:
+                await self.webrtc_hosts[session_url].send_json(message)
+            except Exception:
+                self.disconnect(session_url, self.webrtc_hosts[session_url])
+
+    async def send_to_viewers(self, session_url: str, message: dict):
+        """Отправка сообщения всем зрителям"""
+        if session_url in self.webrtc_viewers:
+            for viewer in list(self.webrtc_viewers[session_url]):
+                try:
+                    await viewer.send_json(message)
+                except Exception:
+                    self.disconnect(session_url, viewer)
 
 manager = ConnectionManager()
 
@@ -459,6 +506,72 @@ async def websocket_endpoint(
                             "type": "error",
                             "message": f"Ошибка при завершении игры: {str(e)}"
                         })
+                elif message_type == "webrtc_register_host" and is_host:
+                    # Регистрация источника WebRTC (ведущий)
+                    manager.register_webrtc_host(session_url, websocket)
+                    await websocket.send_json({
+                        "type": "webrtc_host_registered",
+                        "session_url": session_url
+                    })
+                elif message_type == "webrtc_register_viewer" and not is_host:
+                    # Регистрация зрителя WebRTC
+                    manager.register_webrtc_viewer(session_url, websocket)
+                    await websocket.send_json({
+                        "type": "webrtc_viewer_registered",
+                        "session_url": session_url
+                    })
+                    # Уведомляем источник о новом зрителе - он должен пересоздать offer
+                    if session_url in manager.webrtc_hosts:
+                        try:
+                            await manager.send_to_host(session_url, {
+                                "type": "webrtc_viewer_connected",
+                                "session_url": session_url
+                            })
+                            viewers_count = len(manager.webrtc_viewers.get(session_url, []))
+                            logger.info(f"[WebRTC] Уведомление отправлено источнику о новом зрителе сессии {session_url}. Всего зрителей: {viewers_count}")
+                        except Exception as e:
+                            logger.error(f"[WebRTC] Ошибка при уведомлении источника о новом зрителе сессии {session_url}: {e}")
+                elif message_type == "webrtc_offer":
+                    # Offer от источника к зрителям
+                    if is_host:
+                        offer = data.get("offer")
+                        if offer:
+                            # Сохраняем offer для новых зрителей
+                            viewers_count = len(manager.webrtc_viewers.get(session_url, []))
+                            logger.info(f"[WebRTC] Offer отправлен от источника сессии {session_url} к {viewers_count} зрителям")
+                            # Отправляем offer всем существующим зрителям
+                            await manager.send_to_viewers(session_url, {
+                                "type": "webrtc_offer",
+                                "offer": offer
+                            })
+                elif message_type == "webrtc_answer":
+                    # Answer от зрителя к источнику
+                    if not is_host:
+                        answer = data.get("answer")
+                        if answer:
+                            # Отправляем answer источнику
+                            await manager.send_to_host(session_url, {
+                                "type": "webrtc_answer",
+                                "answer": answer,
+                                "viewer_id": user.id
+                            })
+                elif message_type == "webrtc_ice_candidate":
+                    # ICE кандидат от источника к зрителям или наоборот
+                    ice_candidate = data.get("ice_candidate")
+                    if ice_candidate:
+                        if is_host:
+                            # От источника к зрителям
+                            await manager.send_to_viewers(session_url, {
+                                "type": "webrtc_ice_candidate",
+                                "ice_candidate": ice_candidate
+                            })
+                        else:
+                            # От зрителя к источнику
+                            await manager.send_to_host(session_url, {
+                                "type": "webrtc_ice_candidate",
+                                "ice_candidate": ice_candidate,
+                                "viewer_id": user.id
+                            })
                 else:
                     await manager.broadcast(session_url, data)
                     

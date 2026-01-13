@@ -7,6 +7,12 @@ class SessionManager {
         this.players = [];
         this.websocket = null;
         this.isConnected = false;
+        // WebRTC
+        this.localStream = null;
+        this.peerConnections = new Map(); // viewer_id -> RTCPeerConnection
+        this.isStreaming = false;
+        this.cameraEnabled = true;
+        this.microphoneEnabled = true;
         this.init();
     }
 
@@ -62,6 +68,27 @@ class SessionManager {
         const endButton = document.getElementById('end-button');
         if (endButton) {
             endButton.addEventListener('click', () => this.endSession());
+        }
+
+        // WebRTC controls
+        const startStreamButton = document.getElementById('start-stream-button');
+        if (startStreamButton) {
+            startStreamButton.addEventListener('click', () => this.startWebRTCStream());
+        }
+
+        const stopStreamButton = document.getElementById('stop-stream-button');
+        if (stopStreamButton) {
+            stopStreamButton.addEventListener('click', () => this.stopWebRTCStream());
+        }
+
+        const toggleCameraButton = document.getElementById('toggle-camera-button');
+        if (toggleCameraButton) {
+            toggleCameraButton.addEventListener('click', () => this.toggleCamera());
+        }
+
+        const toggleMicrophoneButton = document.getElementById('toggle-microphone-button');
+        if (toggleMicrophoneButton) {
+            toggleMicrophoneButton.addEventListener('click', () => this.toggleMicrophone());
         }
     }
 
@@ -124,6 +151,19 @@ class SessionManager {
                 
                 this.requestSessionInfo();
                 this.requestPlayersList();
+                
+                // Проверяем, была ли активная трансляция до перезагрузки
+                const wasStreaming = sessionStorage.getItem(`streaming_${this.sessionUrl}`);
+                if (wasStreaming === 'true') {
+                    console.log('Обнаружена активная трансляция до перезагрузки');
+                    // Автоматически восстанавливаем трансляцию после небольшой задержки
+                    setTimeout(() => {
+                        console.log('Автоматическое восстановление трансляции...');
+                        // Не показываем диалог, просто восстанавливаем
+                        // Пользователь может остановить трансляцию вручную, если нужно
+                        this.startWebRTCStream();
+                    }, 1500);
+                }
             };
 
             this.websocket.onmessage = (event) => {
@@ -146,8 +186,6 @@ class SessionManager {
     }
 
     handleWebSocketMessage(message) {
-        console.log('Получено сообщение:', message);
-
         switch (message.type) {
             case 'session_joined':
                 
@@ -230,6 +268,45 @@ class SessionManager {
                     this.session.status = message.status;
                     this.updateUI();
                 }
+                break;
+
+            case 'webrtc_host_registered':
+                // Если была активная трансляция, перезапускаем её
+                if (this.isStreaming && this.localStream) {
+                    setTimeout(() => {
+                        this.sendWebRTCOfferToViewers();
+                    }, 500);
+                }
+                break;
+
+            case 'webrtc_viewer_connected':
+                // Новый зритель подключился - пересоздаём offer
+                if (this.isStreaming && this.localStream) {
+                    // Закрываем старое соединение и создаём новое
+                    const oldPc = this.peerConnections.get('broadcast');
+                    if (oldPc) {
+                        try {
+                            oldPc.close();
+                        } catch (error) {
+                            console.error('Ошибка при закрытии старого соединения:', error);
+                        }
+                        this.peerConnections.delete('broadcast');
+                    }
+                    // Пересоздаём offer для всех зрителей
+                    setTimeout(() => {
+                        this.sendWebRTCOfferToViewers();
+                    }, 300);
+                }
+                break;
+
+            case 'webrtc_answer':
+                // Получен answer от зрителя
+                this.handleWebRTCAnswer(message.answer, message.viewer_id);
+                break;
+
+            case 'webrtc_ice_candidate':
+                // Получен ICE кандидат от зрителя
+                this.handleWebRTCIceCandidate(message.ice_candidate, message.viewer_id);
                 break;
 
             default:
@@ -625,6 +702,261 @@ class SessionManager {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    // WebRTC методы
+    async startWebRTCStream() {
+        try {
+            // Проверяем, не запущена ли уже трансляция
+            if (this.isStreaming && this.localStream) {
+                console.warn('Трансляция уже запущена');
+                return;
+            }
+            
+            // Останавливаем предыдущий поток, если есть
+            if (this.localStream) {
+                this.localStream.getTracks().forEach(track => track.stop());
+                this.localStream = null;
+            }
+            
+            // Запрашиваем доступ к камере
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 },
+                    facingMode: 'user' // Передняя камера
+                },
+                audio: true
+            });
+
+            this.localStream = stream;
+            this.isStreaming = true;
+            
+            // Сохраняем состояние трансляции
+            sessionStorage.setItem(`streaming_${this.sessionUrl}`, 'true');
+
+            // Отображаем локальный поток
+            const videoElement = document.getElementById('host-video');
+            const placeholder = document.getElementById('host-video-placeholder');
+            if (videoElement) {
+                videoElement.srcObject = stream;
+                videoElement.style.display = 'block';
+            }
+            if (placeholder) {
+                placeholder.style.display = 'none';
+            }
+
+            // Обновляем UI
+            const startButton = document.getElementById('start-stream-button');
+            const stopButton = document.getElementById('stop-stream-button');
+            const toggleCameraButton = document.getElementById('toggle-camera-button');
+            const toggleMicrophoneButton = document.getElementById('toggle-microphone-button');
+            
+            if (startButton) startButton.style.display = 'none';
+            if (stopButton) stopButton.style.display = 'block';
+            if (toggleCameraButton) toggleCameraButton.style.display = 'block';
+            if (toggleMicrophoneButton) toggleMicrophoneButton.style.display = 'block';
+
+            // Регистрируемся как источник
+            if (this.websocket && this.isConnected) {
+                this.websocket.send(JSON.stringify({
+                    type: 'webrtc_register_host',
+                    session_url: this.sessionUrl
+                }));
+                
+                // Отправляем offer после небольшой задержки
+                setTimeout(() => {
+                    this.sendWebRTCOfferToViewers();
+                }, 1000);
+            }
+
+            // Обрабатываем отключение потока
+            stream.getTracks().forEach(track => {
+                track.onended = () => {
+                    if (this.isStreaming) {
+                        this.stopWebRTCStream();
+                    }
+                };
+            });
+
+        } catch (error) {
+            console.error('Ошибка при запуске трансляции:', error);
+            alert('Не удалось начать трансляцию. Проверьте разрешения на доступ к камере и микрофону.');
+        }
+    }
+
+    async stopWebRTCStream() {
+        // Останавливаем все треки
+        if (this.localStream) {
+            this.localStream.getTracks().forEach(track => track.stop());
+            this.localStream = null;
+        }
+
+        // Закрываем все peer connections
+        this.peerConnections.forEach((pc, viewerId) => {
+            try {
+                pc.close();
+            } catch (error) {
+                console.error('Ошибка при закрытии peer connection:', error);
+            }
+        });
+        this.peerConnections.clear();
+
+        this.isStreaming = false;
+        
+        // Удаляем состояние трансляции
+        sessionStorage.removeItem(`streaming_${this.sessionUrl}`);
+
+        // Обновляем UI
+        const videoElement = document.getElementById('host-video');
+        const placeholder = document.getElementById('host-video-placeholder');
+        if (videoElement) {
+            videoElement.srcObject = null;
+            videoElement.style.display = 'none';
+        }
+        if (placeholder) {
+            placeholder.style.display = 'block';
+        }
+
+        const startButton = document.getElementById('start-stream-button');
+        const stopButton = document.getElementById('stop-stream-button');
+        const toggleCameraButton = document.getElementById('toggle-camera-button');
+        const toggleMicrophoneButton = document.getElementById('toggle-microphone-button');
+        
+        if (startButton) startButton.style.display = 'block';
+        if (stopButton) stopButton.style.display = 'none';
+        if (toggleCameraButton) toggleCameraButton.style.display = 'none';
+        if (toggleMicrophoneButton) toggleMicrophoneButton.style.display = 'none';
+    }
+
+    toggleCamera() {
+        if (!this.localStream) return;
+
+        const videoTracks = this.localStream.getVideoTracks();
+        videoTracks.forEach(track => {
+            track.enabled = !track.enabled;
+            this.cameraEnabled = track.enabled;
+        });
+
+        const button = document.getElementById('toggle-camera-button');
+        if (button) {
+            const text = button.querySelector('.session-stream-controls__button-text');
+            if (text) {
+                text.textContent = this.cameraEnabled ? 'Выключить камеру' : 'Включить камеру';
+            }
+        }
+    }
+
+    toggleMicrophone() {
+        if (!this.localStream) return;
+
+        const audioTracks = this.localStream.getAudioTracks();
+        audioTracks.forEach(track => {
+            track.enabled = !track.enabled;
+            this.microphoneEnabled = track.enabled;
+        });
+
+        const button = document.getElementById('toggle-microphone-button');
+        if (button) {
+            const text = button.querySelector('.session-stream-controls__button-text');
+            if (text) {
+                text.textContent = this.microphoneEnabled ? 'Выключить микрофон' : 'Включить микрофон';
+            }
+        }
+    }
+
+    async createPeerConnectionForViewer(viewerId) {
+        const configuration = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+        };
+
+        const pc = new RTCPeerConnection(configuration);
+
+        // Добавляем локальные треки
+        if (this.localStream) {
+            this.localStream.getTracks().forEach(track => {
+                pc.addTrack(track, this.localStream);
+            });
+        }
+
+        // Обработка ICE кандидатов
+        pc.onicecandidate = (event) => {
+            if (event.candidate && this.websocket && this.isConnected && this.websocket.readyState === WebSocket.OPEN) {
+                try {
+                    this.websocket.send(JSON.stringify({
+                        type: 'webrtc_ice_candidate',
+                        ice_candidate: event.candidate
+                    }));
+                } catch (error) {
+                    console.error('Ошибка при отправке ICE кандидата:', error);
+                }
+            }
+        };
+
+        // Обработка ошибок
+        pc.onerror = (error) => {
+            console.error('WebRTC ошибка:', error);
+        };
+
+        // Обработка состояния соединения
+        pc.onconnectionstatechange = () => {
+            if (pc.connectionState === 'failed') {
+                console.error('WebRTC соединение не удалось установить');
+            }
+        };
+
+        return pc;
+    }
+
+    async handleWebRTCAnswer(answer, viewerId) {
+        const pc = this.peerConnections.get('broadcast');
+        if (pc) {
+            try {
+                await pc.setRemoteDescription(new RTCSessionDescription(answer));
+            } catch (error) {
+                console.error('Ошибка при установке remote description для answer:', error);
+            }
+        }
+    }
+
+    async handleWebRTCIceCandidate(candidate, viewerId) {
+        const pc = this.peerConnections.get('broadcast');
+        if (pc) {
+            try {
+                await pc.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch (error) {
+                console.error('Ошибка при добавлении ICE кандидата:', error);
+            }
+        }
+    }
+
+    async sendWebRTCOfferToViewers() {
+        if (!this.localStream || !this.isStreaming) return;
+
+        // Создаем одно соединение для трансляции всем зрителям
+        // В реальном приложении нужен SFU для масштабирования
+        const viewerId = 'broadcast';
+        
+        if (!this.peerConnections.has(viewerId)) {
+            const pc = await this.createPeerConnectionForViewer(viewerId);
+            this.peerConnections.set(viewerId, pc);
+
+            const offer = await pc.createOffer({
+                offerToReceiveAudio: false,
+                offerToReceiveVideo: false
+            });
+            await pc.setLocalDescription(offer);
+
+            if (this.websocket && this.isConnected) {
+                this.websocket.send(JSON.stringify({
+                    type: 'webrtc_offer',
+                    offer: offer
+                }));
+            }
+        }
     }
 }
 

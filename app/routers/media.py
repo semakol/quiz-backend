@@ -56,7 +56,7 @@ async def upload_file(
             with open(file_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
             
-            uri = f"/api/media/files/{unique_filename}"
+            uri = f"/media/{unique_filename}"
         
         media_in = schemas.MediaCreate(
             title=file.filename,

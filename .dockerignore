@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Documentation
+README.md
+*.md
+
+# Media files (хранятся в Yandex Object Storage)
+media/
+
+# Terraform
+terraform/
+*.tfstate
+*.tfstate.backup
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Alembic (версии миграций оставляем, но кеш удаляем)
+alembic/__pycache__/
+alembic/versions/__pycache__/
+
+# Frontend
+frontendQuize/
+
+# OpenAPI (генерируется автоматически)
+openapi.json

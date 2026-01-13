@@ -90,7 +90,7 @@ def get_file_url(object_key: str, expires_in: int = 3600) -> Optional[str]:
 
 def get_public_url(object_key: str) -> str:
     if not settings.USE_OBJECT_STORAGE:
-        return f"/media/files/{object_key}"
+        return f"/media/{object_key}"
     
     endpoint = settings.YANDEX_STORAGE_ENDPOINT.rstrip('/')
     bucket = settings.YANDEX_STORAGE_BUCKET

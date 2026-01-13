@@ -16,13 +16,73 @@ class PlayerSessionManager {
         this.isManualClose = false; 
         this.answerSubmitted = false; 
         this.players = []; 
+        // WebRTC
+        this.peerConnection = null;
+        this.remoteStream = null;
+        this.pendingAnswer = null;
+        this.offerWaitTimeout = null;
+        this.pendingIceCandidates = []; // Буфер для ICE-кандидатов до setRemoteDescription
+        this.isPlayingVideo = false; // Флаг для отслеживания попытки воспроизведения
         
         if (!this.sessionUrl) {
             this.showError('URL сессии не указан. Используйте формат: ?url=session-url');
             return;
         }
 
+        // Устанавливаем темный фон для страницы игрока
+        this.setDarkBackground();
+        this.initAudioToggle();
         this.init();
+    }
+
+    initAudioToggle() {
+        const toggleButton = document.getElementById('toggle-audio-button');
+        const videoElement = document.getElementById('webrtc-background-video');
+        const mutedIcon = document.getElementById('audio-icon-muted');
+        const unmutedIcon = document.getElementById('audio-icon-unmuted');
+
+        if (!toggleButton || !videoElement) return;
+
+        // Обновляем иконку в зависимости от состояния muted
+        const updateIcon = () => {
+            if (videoElement.muted) {
+                mutedIcon.style.display = 'block';
+                unmutedIcon.style.display = 'none';
+            } else {
+                mutedIcon.style.display = 'none';
+                unmutedIcon.style.display = 'block';
+            }
+        };
+
+        // Инициализируем иконку
+        updateIcon();
+
+        // Обработчик клика
+        toggleButton.addEventListener('click', () => {
+            videoElement.muted = !videoElement.muted;
+            updateIcon();
+        });
+
+        // Следим за изменениями muted (на случай, если оно меняется программно)
+        const observer = new MutationObserver(() => {
+            updateIcon();
+        });
+        observer.observe(videoElement, {
+            attributes: true,
+            attributeFilter: ['muted']
+        });
+    }
+
+    setDarkBackground() {
+        // Устанавливаем темный фон для body и html
+        document.body.style.backgroundColor = '#000';
+        document.documentElement.style.backgroundColor = '#000';
+        
+        // Убираем белый фон у страницы
+        const pageElement = document.querySelector('.page--player');
+        if (pageElement) {
+            pageElement.style.backgroundColor = 'transparent';
+        }
     }
 
     getSessionUrlFromQuery() {
@@ -85,10 +145,34 @@ class PlayerSessionManager {
                 }
                 
                 this.updateWaitingMessage('Подключение к сессии...');
+                
+                // Регистрируемся как зритель WebRTC
+                this.websocket.send(JSON.stringify({
+                    type: 'webrtc_register_viewer',
+                    session_url: this.sessionUrl
+                }));
+                
+                // Если есть сохранённый answer, отправляем его
+                if (this.pendingAnswer) {
+                    setTimeout(() => {
+                        if (this.websocket && this.isConnected) {
+                            this.websocket.send(JSON.stringify({
+                                type: 'webrtc_answer',
+                                answer: this.pendingAnswer
+                            }));
+                            console.log('Отправлен сохранённый answer после переподключения');
+                            this.pendingAnswer = null;
+                        }
+                    }, 500);
+                }
             };
 
             this.websocket.onmessage = (event) => {
                 const message = JSON.parse(event.data);
+                // Логируем только важные сообщения
+                if (message.type === 'error' || message.type === 'webrtc_offer') {
+                    console.log('Получено сообщение:', message.type);
+                }
                 this.handleWebSocketMessage(message);
             };
 
@@ -102,6 +186,27 @@ class PlayerSessionManager {
                 this.isConnected = false;
                 if (this.timerInterval) {
                     clearInterval(this.timerInterval);
+                }
+                
+                // Отменяем таймер ожидания offer
+                if (this.offerWaitTimeout) {
+                    clearTimeout(this.offerWaitTimeout);
+                    this.offerWaitTimeout = null;
+                }
+                
+                // Закрываем WebRTC соединение
+                if (this.peerConnection) {
+                    try {
+                        this.peerConnection.close();
+                        this.peerConnection = null;
+                    } catch (error) {
+                        console.error('Ошибка при закрытии WebRTC соединения:', error);
+                    }
+                }
+                const videoElement = document.getElementById('webrtc-background-video');
+                if (videoElement) {
+                    videoElement.style.display = 'none';
+                    videoElement.srcObject = null;
                 }
                 
                 
@@ -127,8 +232,6 @@ class PlayerSessionManager {
     }
 
     handleWebSocketMessage(message) {
-        console.log('Получено сообщение:', message);
-
         switch (message.type) {
             case 'session_joined':
                 
@@ -257,6 +360,43 @@ class PlayerSessionManager {
                     });
                 }
                 this.showError(message.message || 'Произошла ошибка');
+                break;
+
+            case 'webrtc_viewer_registered':
+                console.log('WebRTC зритель зарегистрирован');
+                // Ждём получения offer от источника
+                console.log('Ожидание offer от источника...');
+                // Если offer не пришёл в течение 3 секунд, повторно регистрируемся
+                this.offerWaitTimeout = setTimeout(() => {
+                    if (!this.peerConnection && this.websocket && this.isConnected) {
+                        console.log('Offer не получен в течение 3 секунд, повторная регистрация...');
+                        // Повторно регистрируемся как зритель
+                        this.websocket.send(JSON.stringify({
+                            type: 'webrtc_register_viewer',
+                            session_url: this.sessionUrl
+                        }));
+                    }
+                }, 3000);
+                break;
+
+            case 'webrtc_offer':
+                // Получен offer от источника
+                console.log('Получено сообщение webrtc_offer', message.offer);
+                // Отменяем таймер ожидания offer
+                if (this.offerWaitTimeout) {
+                    clearTimeout(this.offerWaitTimeout);
+                    this.offerWaitTimeout = null;
+                }
+                if (message.offer) {
+                    this.handleWebRTCOffer(message.offer);
+                } else {
+                    console.error('Offer получен, но данные отсутствуют');
+                }
+                break;
+
+            case 'webrtc_ice_candidate':
+                // Получен ICE кандидат от источника
+                this.handleWebRTCIceCandidate(message.ice_candidate);
                 break;
 
             default:
@@ -756,6 +896,303 @@ class PlayerSessionManager {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    // WebRTC методы
+    async createPeerConnection() {
+        const configuration = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+        };
+
+        const pc = new RTCPeerConnection(configuration);
+
+        // Обработка удалённого потока
+        pc.ontrack = (event) => {
+            const newStream = event.streams[0] || event.stream;
+            if (!newStream) {
+                console.error('Поток не найден в событии!');
+                return;
+            }
+            
+            const videoElement = document.getElementById('webrtc-background-video');
+            if (!videoElement) {
+                console.error('Видео элемент не найден в DOM!');
+                return;
+            }
+            
+            // Проверяем, не установлен ли уже тот же поток
+            if (videoElement.srcObject === newStream && this.remoteStream === newStream) {
+                return; // Поток уже установлен, не делаем ничего
+            }
+            
+            this.remoteStream = newStream;
+            
+            // Устанавливаем srcObject только если он отличается
+            if (videoElement.srcObject !== newStream) {
+                videoElement.srcObject = newStream;
+            }
+            
+            // Устанавливаем muted для автоматического воспроизведения
+            videoElement.muted = true;
+            
+            // Принудительно устанавливаем все стили с !important через setProperty
+            videoElement.style.setProperty('display', 'block', 'important');
+            videoElement.style.setProperty('opacity', '0.7', 'important');
+            videoElement.style.setProperty('z-index', '0', 'important');
+            videoElement.style.setProperty('position', 'fixed', 'important');
+            videoElement.style.setProperty('top', '0', 'important');
+            videoElement.style.setProperty('left', '0', 'important');
+            videoElement.style.setProperty('width', '100%', 'important');
+            videoElement.style.setProperty('height', '100%', 'important');
+            videoElement.style.setProperty('object-fit', 'cover', 'important');
+            videoElement.style.setProperty('pointer-events', 'none', 'important');
+            
+            // Убеждаемся, что body и html имеют прозрачный фон
+            document.body.style.setProperty('background-color', 'transparent', 'important');
+            document.documentElement.style.setProperty('background-color', 'transparent', 'important');
+            
+            // Убираем белый фон у страницы
+            const pageElement = document.querySelector('.page--player');
+            if (pageElement) {
+                pageElement.style.setProperty('background-color', 'transparent', 'important');
+            }
+            
+            // Принудительное воспроизведение (только если не идет уже попытка)
+            if (!this.isPlayingVideo) {
+                this.isPlayingVideo = true;
+                const tryPlay = () => {
+                    if (videoElement.paused && videoElement.readyState >= 2) {
+                        const playPromise = videoElement.play();
+                        if (playPromise !== undefined) {
+                            playPromise.then(() => {
+                                this.isPlayingVideo = false;
+                                // Убеждаемся, что видео видно
+                                const rect = videoElement.getBoundingClientRect();
+                                if (rect.width === 0 || rect.height === 0) {
+                                    this.ensureVideoVisible();
+                                }
+                            }).catch(err => {
+                                // Игнорируем ошибку AbortError (прерванный запрос)
+                                if (err.name !== 'AbortError') {
+                                    console.error('Ошибка воспроизведения видео:', err);
+                                }
+                                this.isPlayingVideo = false;
+                            });
+                        } else {
+                            this.isPlayingVideo = false;
+                        }
+                    } else {
+                        this.isPlayingVideo = false;
+                    }
+                };
+                
+                // Используем oncanplay для воспроизведения, когда видео готово
+                const handleCanPlay = () => {
+                    if (videoElement.paused && !this.isPlayingVideo) {
+                        this.isPlayingVideo = true;
+                        videoElement.play().then(() => {
+                            this.isPlayingVideo = false;
+                        }).catch(err => {
+                            if (err.name !== 'AbortError') {
+                                console.error('Ошибка воспроизведения видео:', err);
+                            }
+                            this.isPlayingVideo = false;
+                        });
+                    }
+                    videoElement.removeEventListener('canplay', handleCanPlay);
+                };
+                
+                videoElement.addEventListener('canplay', handleCanPlay);
+                
+                // Если видео уже готово, пробуем сразу
+                if (videoElement.readyState >= 2) {
+                    tryPlay();
+                }
+                
+                setTimeout(() => {
+                    this.ensureVideoVisible();
+                }, 500);
+            }
+            
+            videoElement.onerror = (error) => {
+                console.error('Ошибка видео элемента:', error);
+                this.isPlayingVideo = false;
+            };
+        };
+
+        // Обработка ICE кандидатов
+        pc.onicecandidate = (event) => {
+            if (event.candidate && this.websocket && this.isConnected && this.websocket.readyState === WebSocket.OPEN) {
+                try {
+                    this.websocket.send(JSON.stringify({
+                        type: 'webrtc_ice_candidate',
+                        ice_candidate: event.candidate
+                    }));
+                } catch (error) {
+                    console.error('Ошибка при отправке ICE кандидата:', error);
+                }
+            }
+        };
+
+        // Обработка ошибок
+        pc.onerror = (error) => {
+            console.error('WebRTC ошибка:', error);
+        };
+
+        // Обработка закрытия соединения
+        pc.onconnectionstatechange = () => {
+            const videoElement = document.getElementById('webrtc-background-video');
+            
+            if (pc.connectionState === 'connected') {
+                this.ensureVideoVisible();
+            } else if (pc.connectionState === 'connecting' && this.remoteStream) {
+                this.ensureVideoVisible();
+            } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+                if (videoElement) {
+                    videoElement.style.display = 'none';
+                }
+            }
+        };
+        
+        // Обработка изменения состояния ICE соединения
+        pc.oniceconnectionstatechange = () => {
+            if (pc.iceConnectionState === 'failed') {
+                console.error('ICE соединение не удалось установить');
+            }
+        };
+
+        return pc;
+    }
+
+    async handleWebRTCOffer(offer) {
+        try {
+            // Проверяем валидность offer
+            if (!offer || !offer.type || offer.type !== 'offer') {
+                console.error('Некорректный offer:', offer);
+                return;
+            }
+            
+            // Закрываем существующее соединение, если есть
+            if (this.peerConnection) {
+                try {
+                    this.peerConnection.close();
+                } catch (error) {
+                    console.error('Ошибка при закрытии старого соединения:', error);
+                }
+                this.peerConnection = null;
+            }
+            
+            // Очищаем буфер кандидатов - они относятся к старому SDP
+            this.pendingIceCandidates = [];
+
+            // Создаём новое соединение
+            this.peerConnection = await this.createPeerConnection();
+            
+            await this.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+            
+            // Применяем только кандидаты, которые пришли после setRemoteDescription для текущего SDP
+            // (они будут добавлены через handleWebRTCIceCandidate)
+
+            // Создаём answer
+            const answer = await this.peerConnection.createAnswer();
+            await this.peerConnection.setLocalDescription(answer);
+
+            // Отправляем answer источнику
+            setTimeout(() => {
+                if (this.websocket && this.isConnected && this.websocket.readyState === WebSocket.OPEN) {
+                    try {
+                        this.websocket.send(JSON.stringify({
+                            type: 'webrtc_answer',
+                            answer: answer
+                        }));
+                    } catch (error) {
+                        console.error('Ошибка при отправке answer:', error);
+                        this.pendingAnswer = answer;
+                    }
+                } else {
+                    this.pendingAnswer = answer;
+                }
+            }, 200);
+        } catch (error) {
+            console.error('Ошибка при обработке WebRTC offer:', error);
+        }
+    }
+
+    async handleWebRTCIceCandidate(candidate) {
+        if (!this.peerConnection) {
+            // Если соединение ещё не создано, игнорируем кандидат (он относится к старому SDP)
+            return;
+        }
+        
+        // Проверяем, установлен ли remoteDescription (текущий SDP)
+        if (this.peerConnection.remoteDescription === null) {
+            // Если remoteDescription ещё не установлен, буферизуем кандидат для текущего SDP
+            this.pendingIceCandidates.push(candidate);
+            return;
+        }
+        
+        // Проверяем, что соединение в правильном состоянии для добавления кандидатов
+        if (this.peerConnection.signalingState === 'closed' || 
+            this.peerConnection.connectionState === 'closed' ||
+            this.peerConnection.connectionState === 'failed') {
+            // Соединение закрыто или не удалось - игнорируем кандидат
+            return;
+        }
+        
+        try {
+            await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (error) {
+            // Если ошибка InvalidStateError - кандидат относится к старому SDP, игнорируем
+            if (error.name === 'InvalidStateError') {
+                // Игнорируем - кандидат относится к старому SDP
+                return;
+            } else if (error.name === 'OperationError') {
+                // Временная ошибка - пробуем добавить в буфер
+                this.pendingIceCandidates.push(candidate);
+            } else {
+                console.error('Ошибка при добавлении ICE кандидата:', error);
+            }
+        }
+    }
+
+    ensureVideoVisible() {
+        const videoElement = document.getElementById('webrtc-background-video');
+        if (videoElement && this.remoteStream) {
+            // Устанавливаем srcObject только если он отличается
+            if (videoElement.srcObject !== this.remoteStream) {
+                videoElement.srcObject = this.remoteStream;
+            }
+            
+            videoElement.style.setProperty('display', 'block', 'important');
+            videoElement.style.setProperty('opacity', '0.7', 'important');
+            videoElement.style.setProperty('z-index', '0', 'important');
+            videoElement.style.setProperty('position', 'fixed', 'important');
+            videoElement.style.setProperty('top', '0', 'important');
+            videoElement.style.setProperty('left', '0', 'important');
+            videoElement.style.setProperty('width', '100%', 'important');
+            videoElement.style.setProperty('height', '100%', 'important');
+            
+            // Убеждаемся, что фон прозрачный
+            document.body.style.setProperty('background-color', 'transparent', 'important');
+            document.documentElement.style.setProperty('background-color', 'transparent', 'important');
+            
+            // Пробуем воспроизвести только если видео готово и не идет уже попытка
+            if (!this.isPlayingVideo && videoElement.paused && videoElement.readyState >= 2) {
+                this.isPlayingVideo = true;
+                videoElement.play().then(() => {
+                    this.isPlayingVideo = false;
+                }).catch(err => {
+                    // Игнорируем ошибку AbortError (прерванный запрос)
+                    if (err.name !== 'AbortError') {
+                        console.error('Ошибка при попытке воспроизведения:', err);
+                    }
+                    this.isPlayingVideo = false;
+                });
+            }
+        }
     }
 }
 

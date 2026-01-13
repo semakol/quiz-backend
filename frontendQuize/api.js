@@ -332,6 +332,10 @@ class ApiService {
         if (uri.startsWith('http://') || uri.startsWith('https://')) {
             return uri;
         }
+        // Если URI начинается с /media/, не добавляем /api, так как nginx раздает /media/ напрямую
+        if (uri.startsWith('/api/')) {
+            return uri;
+        }
         return `${this.baseUrl}${uri}`;
     }
 }

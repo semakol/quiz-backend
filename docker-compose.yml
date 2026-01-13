@@ -1,23 +1,70 @@
-version: '3.8'
 services:
-  db:
-    image: postgres:15
+  postgres:
+    image: postgres:16-alpine
+    container_name: quiz-postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: quizdb
-    volumes:
-      - db_data:/var/lib/postgresql/data
     ports:
-      - '5432:5432'
-  api:
-    build: .
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      - "5432:5432"
     volumes:
-      - ./:/app
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - quiz-network
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: quiz-backend
+    environment:
+      DATABASE_URL: postgresql+psycopg2://postgres:postgres@postgres:5432/quizdb
+      SECRET_KEY: ${SECRET_KEY:-123123}
+      USE_OBJECT_STORAGE: ${USE_OBJECT_STORAGE:-false}
+      YANDEX_STORAGE_BUCKET: ${YANDEX_STORAGE_BUCKET:-}
+      YANDEX_STORAGE_ACCESS_KEY: ${YANDEX_STORAGE_ACCESS_KEY:-}
+      YANDEX_STORAGE_SECRET_KEY: ${YANDEX_STORAGE_SECRET_KEY:-}
+      YANDEX_STORAGE_ENDPOINT: ${YANDEX_STORAGE_ENDPOINT:-https://storage.yandexcloud.net}
+      YANDEX_STORAGE_REGION: ${YANDEX_STORAGE_REGION:-ru-central1}
+      USE_INMEMORY_REDIS: ${USE_INMEMORY_REDIS:-true}
+      REQUIRE_AUTH: ${REQUIRE_AUTH:-true}
+      APP_NAME: ${APP_NAME:-Quiz API}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-10080}
     ports:
-      - '8000:8000'
+      - "8000:8000"
+    volumes:
+      - ./media:/app/media
     depends_on:
-      - db
+      postgres:
+        condition: service_healthy
+    networks:
+      - quiz-network
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: quiz-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./frontendQuize:/app/frontendQuize:ro
+      - ./media:/app/media:ro
+    depends_on:
+      - backend
+    networks:
+      - quiz-network
+    restart: unless-stopped
+
 volumes:
-  db_data:
+  postgres_data:
+
+networks:
+  quiz-network:
+    driver: bridge
